@@ -7,7 +7,10 @@ import time
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
+
 from wavefront.evaluation.loaders import (
+    load_standalone_deeponet_state,
     load_standalone_fno_state,
     load_three_stage_metamodel_state,
     load_two_stage_metamodel_state,
@@ -23,6 +26,7 @@ from wavefront.inference.operators import (
     predict_fno_from_sensor_gradients,
     predict_metamodel_from_sensor_gradients,
 )
+from wavefront.inference.deeponet import predict_batch_on_grid
 from wavefront.inference.outputs import (
     save_inference_outputs,
     save_physical_wavefront_outputs,
@@ -30,6 +34,7 @@ from wavefront.inference.outputs import (
 from wavefront.training.precision import set_mixed_precision
 
 OperatorName = Literal[
+    "deeponet",
     "fno",
     "two_stage",
     "three_stage",
@@ -65,9 +70,15 @@ def _parse_args(
         type=Path,
         required=True,
         help=(
-            "Sensor-layout CSV used during training, with normalized X/Y "
-            "coordinates in the original sensor order."
+            "Sensor-layout CSV used during training, in the original sensor order."
         ),
+    )
+
+    parser.add_argument(
+        "--layout-coordinate-system",
+        choices=["pixel", "normalized"],
+        default="pixel",
+        help="Coordinate system of the layout; pixel matches the bundled 1.csv.",
     )
 
     parser.add_argument(
@@ -243,6 +254,9 @@ def _load_operator_state(
         checkpoint: str,
 ) -> dict:
     """Load one saved operator state."""
+    if operator_name == "deeponet":
+        return load_standalone_deeponet_state(run_dir, checkpoint=checkpoint)
+
     if operator_name == "fno":
         return load_standalone_fno_state(
             run_dir,
@@ -303,6 +317,7 @@ def run_prediction_cli(
         x_column=args.layout_x_column,
         y_column=args.layout_y_column,
         sensor_id_column=args.layout_sensor_id_column,
+        coordinate_system=args.layout_coordinate_system,
     )
 
     measurement_batch = load_sensor_gradient_csv(
@@ -342,6 +357,7 @@ def run_prediction_cli(
         "checkpoint": args.checkpoint,
         "measurements": str(args.measurements),
         "sensor_layout": str(args.sensor_layout),
+        "layout_coordinate_system": args.layout_coordinate_system,
         "n_samples": measurement_batch.n_samples,
         "n_sensors": layout.n_sensors,
         "sample_ids": list(measurement_batch.sample_ids),
@@ -380,7 +396,29 @@ def run_prediction_cli(
             args.checkpoint,
         )
 
-        if operator_name == "fno":
+        geometry_state = state.get("deeponet", state)
+        expected_coords = geometry_state.get("branch_sensor_coords")
+        if expected_coords is not None:
+            if (layout.coordinates.shape != expected_coords.shape or
+                    not np.allclose(layout.coordinates, expected_coords, atol=1e-5)):
+                raise ValueError(
+                    "Sensor layout does not match the saved training geometry/order. "
+                    "Check --layout-coordinate-system and sensor IDs."
+                )
+
+        if operator_name == "deeponet":
+            if state["args"].data_mode != "sensor":
+                raise ValueError("CSV inference requires a DeepONet trained in sensor mode.")
+            normalized_wavefronts = predict_batch_on_grid(
+                state["model_fn"], state["params"], normalized_sensor_gradients,
+                p_test=int(state["args"].p_test),
+            )["pred_grid"]
+            normalized_files = save_inference_outputs(
+                output_dir, wavefronts=normalized_wavefronts,
+                operator_name="DeepONet", metadata=resolved, dpi=int(args.dpi),
+            )
+
+        elif operator_name == "fno":
             prediction_result = predict_fno_from_sensor_gradients(
                 state=state,
                 sensor_gradients=normalized_sensor_gradients,

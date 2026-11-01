@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-import orbax.checkpoint as ocp
+from wavefront.checkpoints import restore_params
 
 
 @dataclass(frozen=True)
@@ -90,7 +90,7 @@ def load_artifacts(
     # Restore the selected parameter tree from the standard Orbax checkpoint.
     params_path = (artifacts_dir / "params").resolve()
 
-    params = ocp.StandardCheckpointer().restore(
+    params = restore_params(
         str(params_path)
     )
 

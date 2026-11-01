@@ -375,8 +375,7 @@ def run_two_stage_pipeline(
         dataset_provenance = artifact_dataset.provenance
 
     else:
-        # Keep your current two independent synthetic-data generation blocks.
-        # They should still use data_cfg.stage1_seed and data_cfg.joint_data_seed.
+        # Use independent generated samples for gradient mapping and joint training.
         (
             stage1_wavefronts,
             stage1_sensor_gradients,
@@ -405,7 +404,7 @@ def run_two_stage_pipeline(
         }
     # Create the run directory and stable subdirectories for both stages.
     run_id = run_name or time.strftime("%Y%m%d-%H%M%S")
-    run_dir = Path(results_root) / run_id
+    run_dir = Path(results_root).expanduser().resolve() / run_id
 
     stage1_dir = run_dir / "stage1_deeponet_gradmap"
     stage2_dir = run_dir / "stage2_joint_random_fno"

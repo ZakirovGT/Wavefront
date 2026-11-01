@@ -1,393 +1,191 @@
-# Wavefront Reconstruction with DeepONet, FNO, and Multi-Stage Operator Learning
-
-This repository is an experimental project for reconstructing two-dimensional wavefronts from sparse slope measurements.
-
-The input is a set of discrete wavefront gradients,
-
-```text
-dU/dx, dU/dy
-```
-
-measured at sensor positions. The target is the corresponding wavefront field `U(x, y)` on a regular grid inside a circular pupil.
-
-The project explores several reconstruction approaches:
-
-* DeepONet for mapping sparse sensor gradients to regular gradient fields;
-* Fourier Neural Operators (FNO) for reconstructing wavefronts from gradient maps;
-* a classical Poisson reconstruction baseline;
-* two-stage DeepONet + randomly initialized FNO training;
-* three-stage DeepONet + FNO training with end-to-end joint fine-tuning;
-* sequential benchmark evaluation designed to reduce accelerator-memory usage.
-
----
-
-## Project Status
-
-> **Work in progress — this is not yet a fully runnable release.**
-
-The project is currently being refactored from a notebook-based workflow into a modular Python package.
-
-The code structure, YAML configurations, CLI entry points, dataset artifacts, training pipelines, inference utilities, and benchmark utilities have been migrated into the repository. However:
-
-* `requirements.txt` has **not yet been updated** for the new package structure and current dependencies;
-* the installation workflow is not finalized;
-* end-to-end execution of every command has not yet been validated from a clean environment;
-* the repository should currently be treated as a development snapshot rather than a reproducible release.
-
-The source code and experiment organization are available for inspection, but successful execution may require manual dependency installation and local configuration adjustments.
-
----
-
-## Example Results
-
-The figures below show earlier synthetic reconstructions for test sample
-`#20001`. They compare learned operator-based methods with the classical
-Poisson baseline.
-
-### Sensor-gradient input example
-
-<p align="center">
-  <img
-    src="images/sensor_s1.png"
-    alt="Wavefront reconstruction from sparse sensor gradients"
-    width="100%"
-  >
-</p>
-
-<p align="center">
-  <em>
-    Figure 1. Reconstruction from sparse sensor-gradient measurements.
-    The multi-stage metamodel achieves the lowest relative L2 error in this
-    example, while DeepONet and FNO also closely reproduce the target
-    wavefront. The Poisson baseline has a much larger error and does not
-    recover the spiral structure accurately.
-  </em>
-</p>
-
-For the shown sensor-input sample:
-
-| Method | Relative L2 error |
-|---|---:|
-| DeepONet | 0.005 |
-| FNO | 0.005 |
-| Metamodel | 0.003 |
-| Poisson baseline | 0.816 |
-
-### Regular-grid gradient input example
-
-<p align="center">
-  <img
-    src="images/regular_z1.png"
-    alt="Wavefront reconstruction from regular-grid gradients"
-    width="100%"
-  >
-</p>
-
-<p align="center">
-  <em>
-    Figure 2. Reconstruction from regular-grid gradient input.
-    DeepONet achieves the lowest relative L2 error for this example, followed
-    by FNO. The Poisson baseline reconstructs the overall low-frequency
-    structure but has noticeably larger residual errors.
-  </em>
-</p>
-
-For the shown regular-grid-input sample:
-
-| Method | Relative L2 error |
-|---|---:|
-| DeepONet | 0.011 |
-| FNO | 0.018 |
-| Poisson baseline | 0.072 |
-
-> These figures are illustrative results from earlier synthetic experiments.
-> They show individual test samples rather than aggregate benchmark metrics.
-> The values have not yet been reproduced as a complete benchmark for the
-> current refactored repository state.
-
-## Repository Structure
-
-```text
-Wavefront/
-├── configs/
-│   ├── benchmark.yaml          # Benchmark configuration
-│   ├── common.yaml             # Shared training defaults
-│   ├── deeponet.yaml           # DeepONet configuration
-│   ├── fno.yaml                # FNO configuration
-│   ├── standalone_data.yaml    # Synthetic dataset configuration
-│   ├── two_stage.yaml          # Two-stage pipeline configuration
-│   └── three_stage.yaml        # Three-stage pipeline configuration
-│
-├── scripts/
-│   ├── generate_dataset.py     # Generate a portable synthetic dataset artifact
-│   ├── train_deeponet.py       # Train a standalone DeepONet model
-│   ├── train_fno.py            # Train a standalone FNO model
-│   ├── train_two_stage.py      # Train the two-stage baseline
-│   ├── train_three_stage.py    # Train the three-stage model
-│   ├── run_benchmark.py        # Run sequential model comparison
-│   ├── predict_fno.py          # FNO inference from measurement CSV files
-│   ├── predict_two_stage.py    # Two-stage inference from measurement CSV files
-│   └── predict_three_stage.py  # Three-stage inference from measurement CSV files
-│
-├── src/
-│   ├── physics/                # Physics-related utilities
-│   │
-│   └── wavefront/
-│       ├── baselines/          # Classical Poisson reconstruction baseline
-│       ├── data/               # Data generation, artifacts, interpolation, batching
-│       ├── evaluation/         # Metrics, reports, timing, and visualization
-│       ├── inference/          # CSV loading and saved-model inference
-│       ├── metamodel/          # Gradient-map, Stage 2, and joint-training logic
-│       ├── models/             # DeepONet and FNO architectures
-│       ├── pipelines/          # Two-stage and three-stage orchestration
-│       ├── training/           # Optimizers, losses, trainers, and CLI helpers
-│       ├── __init__.py
-│       └── config.py
-│
-├── images/
-│   ├── sensor_s1.png          # Example reconstruction comparison
-│   └── regular_z1.png
-│
-├── requirements.txt            # Not yet updated for the current project state
-└── README.md
-```
-
----
-
-## Data Generation
-
-Synthetic wavefront datasets can contain a mixture of several wavefront families.
-
-### Zernike wavefronts
-
-Wavefronts are generated as combinations of Zernike modes on the unit disk. This family represents smooth optical aberrations such as defocus, astigmatism, coma, and higher-order distortions.
-
-### Spiral wavefronts
-
-Spiral-like phase patterns are generated using radial and angular phase terms. These samples contain structured rotating features and are useful for testing reconstruction of more complex phase patterns.
-
-### Distortion wavefronts
-
-Atmosphere-like distortions are generated from filtered random fields. A low-pass Butterworth filter and optional Gaussian blur control the spatial smoothness of the resulting wavefront.
-
-### Sensor gradients
-
-For each synthetic wavefront, the project computes gradient measurements:
-
-```text
-g_x = dU/dx
-g_y = dU/dy
-```
-
-The gradient values are sampled at discrete sensor positions and used as the input to DeepONet and the multi-stage pipelines.
-
----
-
-## Input Modes
-
-The project supports two gradient-input representations.
-
-### `sensor` mode
-
-In `sensor` mode, the input consists of sparse gradient measurements at fixed
-sensor locations:
-
-```text
-(B, P_sensor, 2)
-```
-
-
-where:
-
-- B is the batch size;
-- P_sensor is the number of sensors;
-- the last dimension stores:
-
-`[dU/dx, dU/dy]`
-
-This mode represents the practical case where slope measurements are available
-only at discrete sensor positions.
-
-DeepONet uses sparse sensor gradients directly. In FNO-based workflows, sparse
-measurements are first converted into a regular-grid gradient representation by
-interpolation or by the Stage-1 DeepONet gradient-map model.
-
-
-### regular_grid mode
-
-In regular_grid mode, the input is a dense gradient field on the reconstruction
-grid:
-
-```text
-(B, H, W, 2)
-```
-
-or an equivalent flattened representation:
-
-```text
-(B, H * W, 2)
-```
-
-where H and W are the spatial grid dimensions.
-
-This mode is used when regular-grid gradients are already available or when
-they have been reconstructed from sparse sensor measurements. FNO operates on
-regular-grid gradient fields to predict the final wavefront.
-
-
----
-
-## Model Overview
-
-### DeepONet
-
-DeepONet receives sparse sensor-gradient measurements and predicts a dense regular-grid gradient field.
-DeepONet supports both `sensor` and `regular_grid` input modes. In the main
-multi-stage workflow, it receives sparse sensor gradients and predicts a dense
-regular-grid gradient field.
-
-```text
-Sparse sensor gradients
-        ↓
-     DeepONet
-        ↓
-Regular-grid gradient map
-```
-
-### FNO
-
-The Fourier Neural Operator receives a dense gradient map and predicts the wavefront field.
-FNO operates on regular-grid gradient fields. When the original measurements
-are sparse, the required regular-grid input is produced by interpolation or by
-the Stage-1 DeepONet gradient-map model.
-
-```text
-Regular-grid gradient map
-        ↓
-        FNO
-        ↓
-Wavefront reconstruction
-```
-
-### Two-stage baseline
-
-The two-stage baseline combines:
-
-```text
-Sparse gradients
-    ↓
-DeepONet
-    ↓
-Predicted gradient grid
-    ↓
-Randomly initialized FNO
-    ↓
-Joint end-to-end optimization
-    ↓
-Wavefront
-```
-
-### Three-stage model
-
-The three-stage pipeline separates gradient reconstruction, FNO training, and final joint fine-tuning.
-
-```text
-Stage 1:
-Sparse sensor gradients → DeepONet → clean gradient grid
-
-Stage 2:
-DeepONet gradient predictions → FNO → wavefront
-
-Stage 3:
-DeepONet + FNO → joint fine-tuning using wavefront reconstruction loss
-```
-
----
-
-## Dataset Artifacts
-
-The intended dataset format is a portable artifact directory:
-
-```text
-datasets/<dataset_name>/
-├── arrays.npz
-├── generation_config.yaml
-├── metadata.json
-└── sensor_layout.csv
-```
-
-This format is intended to allow the same fixed dataset, train/test split, and sensor layout to be reused across:
-
-* standalone DeepONet training;
-* standalone FNO training;
-* two-stage training;
-* three-stage training;
-* benchmark evaluation.
-
-The artifact workflow is present in the codebase but has not yet been validated as a complete clean-environment workflow.
-
----
-
-## Intended Command-Line Workflow
-
-The repository contains command-line entry points for the intended workflow:
+# Wavefront Reconstruction
+
+Восстановление двумерного волнового фронта `U(x, y)` по градиентам `dU/dx`,
+`dU/dy` на разреженной сетке датчиков. Проект перенесён из Jupyter Notebook
+в устанавливаемый Python-пакет; Colab и запуск ячеек ноутбука не требуются.
+
+Поддерживаются:
+
+- **DeepONet**: градиенты датчиков → волновой фронт;
+- **FNO**: градиенты регулярной сетки → волновой фронт; в режиме `sensor`
+  вход сначала интерполируется с датчиков;
+- **двухстадийная модель**: обучение DeepONet для карты градиентов,
+  затем совместное обучение с FNO, инициализированным случайно;
+- **трёхстадийная модель**: обучение DeepONet, обучение FNO по его выходам,
+  затем совместное дообучение;
+- **Poisson baseline** и последовательное сравнение всех моделей.
+
+## Установка
+
+Нужен **Python 3.11 или 3.12**, рекомендуется 3.11. Базовая установка работает
+на CPU и не требует CUDA. Проверки выполнялись на Linux / Python 3.11.
+Для Windows рекомендуется WSL2 с Ubuntu; macOS и нативная Windows в этой
+среде не проверялись. Установку GPU-версии JAX нужно согласовать отдельно
+с CUDA/драйвером и закреплённой здесь версией JAX 0.4.26.
 
 ```bash
-python scripts/generate_dataset.py
-python scripts/train_deeponet.py
-python scripts/train_fno.py
-python scripts/train_two_stage.py
-python scripts/train_three_stage.py
-python scripts/run_benchmark.py
+git clone https://github.com/ZakirovGT/Wavefront.git
+cd Wavefront
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip check
 ```
 
-Inference entry points are also included:
+Если проект скачан ZIP-архивом, распакуйте его и выполните те же команды начиная
+с создания `.venv` внутри каталога проекта. В PowerShell активация venv:
+`.venv\Scripts\Activate.ps1`. Все команды ниже выполняются **из корня репозитория**.
+Зависимости объявлены в `pyproject.toml`, транзитивные версии зафиксированы
+в `constraints.txt`. Можно также установить пакет командой `pip install .`;
+для повторения проверенной среды используйте `requirements.txt`.
+
+## Быстрый запуск на CPU
+
+В `configs/smoke/` находятся маленькие конфигурации: сетка 8×8, 6 обучающих
+и 3 тестовых примера, по 2 шага обучения. Это проверка работоспособности,
+а не обучение модели с полезной точностью. Первая JIT-компиляция занимает время.
 
 ```bash
-python scripts/predict_fno.py
-python scripts/predict_two_stage.py
-python scripts/predict_three_stage.py
+python scripts/generate_dataset.py --config configs/smoke/standalone_data.yaml --output-dir datasets/smoke
+python scripts/train_fno.py --config-dir configs/smoke --dataset-dir datasets/smoke --results-root results/smoke
+python scripts/train_deeponet.py --config-dir configs/smoke --dataset-dir datasets/smoke --results-root results/smoke
+python scripts/train_two_stage.py --config configs/smoke/two_stage.yaml --dataset-dir datasets/smoke
+python scripts/train_three_stage.py --config configs/smoke/three_stage.yaml --dataset-dir datasets/smoke
 ```
 
-> These commands describe the intended interface. They are not yet guaranteed to work end-to-end until dependencies, installation instructions, and the remaining integration checks are finalized.
+Каждая команда обучения печатает `Run directory`. Сохраните этот путь для
+предсказаний и сравнения. Повторно используйте готовый dataset; генератор
+защищает существующие данные от перезаписи. Для намеренной замены есть
+`--overwrite`. В среде без дисплея можно установить `MPLBACKEND=Agg`.
 
----
+## Полноразмерные эксперименты
 
-## Current Limitations
+Конфигурации непосредственно в `configs/` задают исследовательские размеры:
+сетка 24×24, 10 000 обучающих и 1 000 тестовых примеров, десятки тысяч шагов.
+Перед длительным запуском подберите размер batch под доступную память.
+Обученных весов в репозитории нет.
 
-* The dependency list in `requirements.txt` is outdated.
-* The project is not yet packaged as a finalized installable release.
-* Full clean-environment reproducibility has not yet been verified.
-* Training and inference commands may require manual environment setup.
-* The provided reconstruction figure is an earlier experimental result, not a current automated regression benchmark.
-* Dataset, checkpoint, and accelerator-specific workflows are still being finalized.
-* The two input modes, `sensor` and `regular_grid`, are represented in the
-  codebase, but their complete end-to-end workflows have not yet been
-  validated from a clean installation.
+```bash
+python scripts/generate_dataset.py --config configs/standalone_data.yaml --output-dir datasets/experiment
+python scripts/train_deeponet.py --dataset-dir datasets/experiment
+python scripts/train_fno.py --dataset-dir datasets/experiment
+python scripts/train_two_stage.py --dataset-dir datasets/experiment
+python scripts/train_three_stage.py --dataset-dir datasets/experiment
+```
 
----
+Без `--dataset-dir` модели генерируют данные по своим конфигурациям. В многостадийных
+моделях при этом используются отдельные seeds; с `--dataset-dir` все стадии
+используют один сохранённый train/test split. `--steps` у самостоятельных
+моделей переопределяет число шагов; для короткой проверки используйте именно
+`configs/smoke`, поскольку один только `--steps` не уменьшает модель и dataset.
 
-## Development Direction
+Семейства синтетических данных: Zernike, spiral и фильтрованные случайные
+искажения. Их доли задаются `frac_zernike`, `frac_spiral`, `frac_distortion`
+(сумма равна 1). Генерация нормализует фронт каждого примера и тем же масштабом
+делит градиенты. Параметры шума и seed находятся в YAML.
 
-The current refactoring focuses on:
+## Датчики и предсказания из CSV
 
-1. separating notebook logic into reusable modules;
-2. making training and inference scripts independent of notebook state;
-3. saving reproducible dataset artifacts;
-4. supporting sequential model loading to reduce accelerator-memory pressure;
-5. preparing a clean public repository structure;
-6. updating dependencies, installation instructions, and validation workflows.
+Включён исходный **`1.csv` — 483 датчика** с колонками `N,X,Y,Zx,Zy,Ampl,Flag(0/1)`.
+Обучение использует `X,Y` в пикселях и преобразование из
+`wavefront.data.sensors.sensor_affine_transform`; порядок строк сохраняется.
+Там находятся калибровочные коэффициенты именно для этой геометрии.
+Для другой установки сначала настройте преобразование и переобучите модель.
 
----
+Замените `RUN_DIR` путём, напечатанным командой обучения FNO:
 
-## Original Workflow
+```bash
+python scripts/predict_fno.py --run-dir RUN_DIR --measurements 1.csv --sensor-layout 1.csv --gx-column Zx --gy-column Zy --sensor-id-column N --layout-sensor-id-column N --normalization-scale 1 --output-dir results/prediction
+```
 
-The project originally began as a notebook-oriented DeepONet reconstruction workflow. The current repository reorganizes that work into modular components while preserving the main scientific goal:
+Для остальных моделей используйте `predict_deeponet.py`, `predict_two_stage.py`
+или `predict_three_stage.py` с соответствующим каталогом обучения. CLI
+DeepONet работает с моделью, обученной в режиме `sensor`.
+
+- `--layout-coordinate-system pixel` — по умолчанию, соответствует `1.csv`.
+  Для уже нормализованных `X,Y` передайте `normalized`.
+- В собственном CSV по умолчанию ожидаются `gx,gy`. Для нескольких примеров
+  добавьте колонку идентификатора и `--sample-id-column sample_id`.
+- Идентификаторы датчиков позволяют переставить измерения в порядок layout.
+  Сам layout должен соответствовать порядку и геометрии обучения.
+- Все датчики участвуют в обучении. Флаг `Flag(0/1)` автоматически не фильтруется;
+  для проверки измерений передайте `--valid-column 'Flag(0/1)'`.
+  Отсутствующие/невалидные измерения по умолчанию вызывают ошибку.
+
+`--normalization-scale` делит входные градиенты и умножает выходной фронт;
+он должен соответствовать физической калибровке измерений и обучению.
+Значение `1` выше проверяет интерфейс на примере CSV. Оно не устанавливает
+физическую калибровку `Zx,Zy`: градиенты должны быть приведены к производным
+по нормализованным координатам модели. Постоянную составляющую фронта нельзя
+определить по градиентам; её задаёт `--wavefront-offset` (по умолчанию 0).
+
+Выход содержит `wavefront_predictions_normalized.npy`,
+`wavefront_predictions_physical.npy`, таблицы CSV, PNG и `inference_manifest.json`.
+Параметр `--units` записывает обозначение единиц в метаданные.
+
+## Сравнение моделей
+
+В копии `configs/benchmark.yaml` (или `configs/smoke/benchmark.yaml` для малой сетки)
+укажите реальные каталоги обучения в секции `runs`:
+
+```yaml
+runs:
+  deeponet: results/smoke/deeponet/ВАШ_ЗАПУСК
+  fno: results/smoke/fno/ВАШ_ЗАПУСК
+  two_stage: results/smoke/two_stage/ВАШ_ЗАПУСК
+  three_stage: results/smoke/three_stage/ВАШ_ЗАПУСК
+```
+
+`null` пропускает модель; Poisson вычисляется всегда. Размер сетки и геометрия
+должны соответствовать обучению. Для smoke-конфигурации:
+
+```bash
+python scripts/run_benchmark.py --config configs/smoke/benchmark.yaml --dataset-dir datasets/smoke --fail-fast
+```
+
+Используйте конфигурацию, в которую записали свои пути. Команда создаёт
+`report.json`, метрики relative L2, замеры времени и сравнения в PNG.
+В режиме `sensor` FNO и Poisson получают интерполяцию измерений датчиков;
+в режиме `grid` — готовые градиенты регулярной сетки.
+
+## Тесты и перенос результатов
+
+```bash
+python -m pip install -c constraints.txt '.[dev]'
+python -m pytest -q
+```
+
+Тесты проверяют CLI, генерацию всех трёх семейств данных, обучение четырёх моделей,
+checkpoint restore, перенос каталогов, CSV-предсказания, общий benchmark,
+визуализации, dropout и отключение промежуточных checkpoints. Они работают
+на CPU; для полного набора нужно несколько минут. CI настроен на Python 3.11/3.12.
+
+Для переноса dataset копируйте весь каталог с `arrays.npz`, `generation_config.yaml`,
+`metadata.json` и `sensor_layout.csv`. Для переноса модели копируйте **весь каталог
+запуска**, включая stage-каталоги для многостадийных моделей. Координаты датчиков
+сохранены вместе с параметрами. Восстановление размещает параметры на устройстве
+нового компьютера, не требуя исходного пути dataset или исходного GPU.
+При CSV-предсказании по-прежнему указывайте соответствующий sensor layout.
+
+## Структура
 
 ```text
-Sparse slope measurements
-        ↓
-Operator learning
-        ↓
-Wavefront reconstruction
+configs/               # полные конфигурации и smoke-примеры
+scripts/               # генерация, обучение, предсказания, benchmark
+src/wavefront/
+  physics/             # сетки, Zernike, spiral, градиенты, фильтры
+  data/                # датчики, генераторы, dataset artifacts
+  models/              # DeepONet и FNO
+  training/            # обучение самостоятельных моделей
+  metamodel/           # карта градиентов и совместное обучение
+  pipelines/           # двух- и трёхстадийные сценарии
+  inference/           # загрузка и предсказания из CSV
+  evaluation/          # метрики, benchmark, визуализации
+tests/                 # CPU-регрессии
+1.csv                  # исходный layout и пример измерений
 ```
+
+Прежние иллюстрации из ноутбука сохранены в `images/sensor_s1.png` и
+`images/regular_z1.png`. Их точность не является результатом коротких smoke-тестов.
+Длительное обучение и GPU-производительность требуют отдельной проверки.

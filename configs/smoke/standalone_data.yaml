@@ -1,0 +1,13 @@
+grid_size: 8
+n_train: 6
+n_test: 3
+branch_grid_path: 1.csv
+frac_zernike: 0.3333333333333333
+frac_spiral: 0.3333333333333333
+frac_distortion: 0.3333333333333333
+with_noise: true
+noise_percentage: 1.0
+noise_lambda: 0.03
+apply_blur: false
+sigma_pix: 1.0
+seed: 42

@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 import jax
 import numpy as np
-import orbax.checkpoint as ocp
+from wavefront.checkpoints import restore_params
 
 from wavefront.inference.predictor import build_eval_model_from_config
 from wavefront.metamodel.gradmap import (
@@ -164,7 +164,7 @@ def _restore_params(
         prefix=prefix,
     )
 
-    return ocp.StandardCheckpointer().restore(
+    return restore_params(
         str(params_dir)
     )
 
@@ -445,6 +445,10 @@ def load_standalone_fno_state(
     )
 
     state["result_dir"] = str(run_dir)
+    coords_path = artifacts_dir / "branch_sensor_coords.npy"
+    state["branch_sensor_coords"] = (
+        np.load(coords_path, allow_pickle=False) if coords_path.is_file() else None
+    )
 
     return state
 

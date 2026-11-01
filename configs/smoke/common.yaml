@@ -1,0 +1,20 @@
+operator_type: deeponet
+data_mode: sensor
+n_train: 6
+n_test: 3
+num_outputs: 1
+seed: 1234
+mixed_precision: false
+mp_dtype: bfloat16
+sensor_to_grid_interp: linear
+benchmark_n: 3
+benchmark_batch: 2
+grid_size: 8
+branch_grid_path: 1.csv
+result_dir: results/wavefront_recon
+save_pred: false
+checkpoint_path: null
+checkpoints_to_keep: 3
+n_vis_test: 1
+sample_idx_vis:
+- 0

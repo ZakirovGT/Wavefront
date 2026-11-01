@@ -170,13 +170,14 @@ def load_sensor_layout(
         x_column: str = "X",
         y_column: str = "Y",
         sensor_id_column: str | None = None,
+        coordinate_system: str = "normalized",
 ) -> SensorLayout:
     """
     Load expected sensor positions and optional IDs from a layout CSV.
 
     The layout must preserve the exact sensor ordering used during training.
-    Coordinates must be in the same normalized coordinate system as training,
-    typically within [-1, 1].
+    Use coordinate_system="pixel" for the bundled 1.csv and the same affine
+    transform as training. The default accepts already normalized coordinates.
     """
     rows, fieldnames = _read_csv_rows(path)
 
@@ -223,6 +224,14 @@ def load_sensor_layout(
         layout_ids: tuple[str, ...] | None = tuple(sensor_ids)
     else:
         layout_ids = None
+
+    if coordinate_system == "pixel":
+        from wavefront.data.sensors import sensor_affine_transform
+
+        x, y = sensor_affine_transform(coordinates[:, 0], coordinates[:, 1])
+        coordinates = np.stack([x, y], axis=1)
+    elif coordinate_system != "normalized":
+        raise ValueError("coordinate_system must be 'pixel' or 'normalized'.")
 
     return SensorLayout(
         coordinates=coordinates,

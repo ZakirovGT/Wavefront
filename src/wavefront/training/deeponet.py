@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import optax
 
 from wavefront.training.common import _tree_l2_norm
-from wavefront.training.precision import _MP_ENABLED, _maybe_mp
+from wavefront.training.precision import _maybe_mp
 
 
 def rel_l2_batch_loss(y_true, y_pred, eps=1e-12):
@@ -39,7 +39,7 @@ def mse_single(y_pred):
     return jnp.mean(jnp.square(y_pred))
 
 
-@partial(jax.jit, static_argnums=(0,))
+@partial(jax.jit, static_argnums=(0,), static_argnames=("training",))
 def apply_net(model, params, u, x, y, rng=None, training=False):
     """
     Apply a DeepONet model to branch inputs and coordinate inputs.
@@ -70,8 +70,7 @@ def apply_net(model, params, u, x, y, rng=None, training=False):
         )
 
     # Keep downstream loss computation, metrics, and logging in float32.
-    if _MP_ENABLED:
-        out = out.astype(jnp.float32)
+    out = out.astype(jnp.float32)
 
     return out
 

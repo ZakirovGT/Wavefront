@@ -496,7 +496,7 @@ def main_routine_deeponet(
                 )
 
         # Save a checkpoint periodically when checkpoint management is enabled.
-        if (it + 1) % args.checkpoint_iter == 0 and mngr is not None:
+        if mngr is not None and (it + 1) % args.checkpoint_iter == 0:
             mngr.save(
                 it + 1,
                 args=ocp_args.Composite(
@@ -504,6 +504,10 @@ def main_routine_deeponet(
                     opt_state=ocp_args.StandardSave(opt_state),
                 ),
             )
+
+    if mngr is not None:
+        mngr.wait_until_finished()
+        mngr.close()
 
     log_file.close()
 

@@ -1,0 +1,5 @@
+include 1.csv requirements.txt constraints.txt
+recursive-include configs *.yaml
+recursive-include scripts *.py
+recursive-include tests *.py
+recursive-include images *.png

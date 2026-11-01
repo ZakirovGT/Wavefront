@@ -98,6 +98,9 @@ def _as_gradient_grid_batch(
             2,
         )
 
+    if gradient_grids.ndim == 3 and gradient_grids.shape == (grid_size, grid_size, 2):
+        return gradient_grids[None, ...]
+
     if gradient_grids.ndim == 3:
         if gradient_grids.shape[1:] != (n_points, 2):
             raise ValueError(
@@ -210,6 +213,10 @@ def _sensor_coords_from_fno_state(
     The original FNO trainer stores branch_grid_path in its training arguments.
     The loaded CSV defines the coordinate order used for interpolation.
     """
+    saved_coords = state.get("branch_sensor_coords")
+    if saved_coords is not None:
+        return np.asarray(saved_coords, dtype=np.float32)
+
     args = state.get("args")
 
     if args is None:

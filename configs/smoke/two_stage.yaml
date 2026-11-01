@@ -1,0 +1,50 @@
+runtime:
+  branch_grid_path: 1.csv
+  results_root: results/smoke/two_stage
+  run_name: null
+  mixed_precision: false
+  mp_dtype: bfloat16
+data:
+  grid_size: 8
+  n_train: 6
+  n_test: 3
+  frac_zernike: 1.0
+  frac_spiral: 0.0
+  frac_distortion: 0.0
+  with_noise: true
+  noise_percentage: 1.0
+  noise_lambda: 0.03
+  apply_blur: false
+  sigma_pix: 1.0
+  stage1_seed: 42
+  joint_data_seed: 43
+stage1:
+  batch_size: 4
+  steps: 2
+  lr: 0.0005
+  weight_decay: 0.0001
+  log_iter: 1
+  eval_iter: 1
+  eval_batch: 2
+  seed: 1234
+  lr_scheduler: constant
+  warmup_steps: null
+  warmup_frac: 0.05
+  end_lr_factor: 0.01
+  basis_dim: 8
+  branch_hidden_dim: 8
+  trunk_hidden_dim: 8
+  branch_num_layers: 1
+  trunk_num_layers: 1
+  trunk_num_frequencies: 2
+  trunk_max_freq: 12.0
+  dropout_rate: 0.0
+fno:
+  config_dir: configs/smoke
+  seed: 123
+joint:
+  steps: 2
+  batch_size: 2
+  lr: 0.001
+  weight_decay: 1.0e-06
+  seed: 0

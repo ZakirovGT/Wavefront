@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import optax
 
 from wavefront.training.common import _tree_l2_norm
-from wavefront.training.precision import _MP_ENABLED, _maybe_mp
+from wavefront.training.precision import _maybe_mp
 
 
 def rel_l2_field_loss(y_true, y_pred, eps=1e-12):
@@ -39,7 +39,7 @@ def rel_l2_field_loss(y_true, y_pred, eps=1e-12):
     return jnp.mean(num / den)
 
 
-@partial(jax.jit, static_argnums=(0,))
+@partial(jax.jit, static_argnums=(0,), static_argnames=("training",))
 def apply_fno(model, params, x, rng=None, training=False):
     """
     Apply an FNO model to a batch of regular-grid inputs.
@@ -53,6 +53,7 @@ def apply_fno(model, params, x, rng=None, training=False):
     if rng is not None:
         kwargs["rngs"] = {"dropout": rng}
 
+    model = model.clone(is_training=training)
     out = model.apply(
         {"params": params},
         x,
@@ -64,8 +65,7 @@ def apply_fno(model, params, x, rng=None, training=False):
         out = jnp.squeeze(out, axis=-1)
 
     # Keep downstream loss computation, metrics, and logging in float32.
-    if _MP_ENABLED:
-        out = out.astype(jnp.float32)
+    out = out.astype(jnp.float32)
 
     return out
 

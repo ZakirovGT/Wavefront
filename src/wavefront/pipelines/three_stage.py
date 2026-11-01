@@ -51,6 +51,7 @@ class ThreeStageDataConfig:
         sigma_pix: Blur standard deviation in pixels.
         stage1_seed: Random seed used for the Stage-1 synthetic dataset.
         stage2_seed: Random seed used for the Stage-2 synthetic dataset.
+        stage3_seed: Random seed used for the Stage-3 synthetic dataset.
     """
 
     grid_size: int = 24
@@ -70,6 +71,7 @@ class ThreeStageDataConfig:
 
     stage1_seed: int = 42
     stage2_seed: int = 43
+    stage3_seed: int = 44
 
 
 def _to_jsonable(value: Any) -> Any:
@@ -443,7 +445,7 @@ def run_three_stage_pipeline(
     # Use a timestamped directory unless a specific run name was provided.
     run_id = run_name or time.strftime("%Y%m%d-%H%M%S")
 
-    run_dir = Path(results_root) / run_id
+    run_dir = Path(results_root).expanduser().resolve() / run_id
 
     stage1_dir = run_dir / "stage1_deeponet_gradmap"
     stage2_dir = run_dir / "stage2_fno"
@@ -528,7 +530,7 @@ def run_three_stage_pipeline(
             model_fn=deeponet_state["model_fn"],
             params=deeponet_state["params"],
             grad_sensor_test=np.asarray(
-                sensor_gradients_stage1[
+                stage1_sensor_gradients[
                 stage1_test_start:stage1_test_stop
                 ]
             ),
@@ -550,24 +552,14 @@ def run_three_stage_pipeline(
 
     # Stage-1 wavefront targets and clean gradient labels are not used after
     # gradient-map training is complete.
-    del _wavefronts_stage1
-    del clean_grid_gradients_stage1
-    del sensor_gradients_stage1
+    del stage1_wavefronts
+    del stage1_grid_gradients
+    del stage1_sensor_gradients
     gc.collect()
 
     # ------------------------------------------------------------------
     # Stage 2: Stage-1 predicted gradient grids -> FNO -> wavefront.
     # ------------------------------------------------------------------
-    (
-        wavefronts_stage2,
-        sensor_gradients_stage2,
-        _clean_grid_gradients_stage2,
-    ) = _generate_synthetic_dataset(
-        data_cfg=data_cfg,
-        seed=int(data_cfg.stage2_seed),
-        branch_grid_path=branch_grid_path,
-    )
-
     # Build an FNO configuration from defaults when no explicit configuration
     # namespace was supplied.
     if fno_args is None:
@@ -617,7 +609,6 @@ def run_three_stage_pipeline(
 
     # Clean Stage-2 gradients are not required by FNO training or joint
     # end-to-end fine-tuning.
-    del _clean_grid_gradients_stage2
     gc.collect()
 
     # ------------------------------------------------------------------

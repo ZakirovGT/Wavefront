@@ -24,6 +24,7 @@ data:
 
   stage1_seed: 42
   stage2_seed: 43
+  stage3_seed: 44
 
 stage1:
   batch_size: 4096

@@ -6,6 +6,9 @@ from typing import Iterable, Literal
 import numpy as np
 import pandas as pd
 
+AlignBy = Literal["row", "N", "XY", "auto"]
+FlagPolicy = Literal["zero", "drop"]
+
 
 @dataclass(frozen=True)
 class CSVColumns:
